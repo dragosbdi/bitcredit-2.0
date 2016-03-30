@@ -89,6 +89,14 @@ public:
     void FromTx(const CTransaction &tx, int nHeightIn) {
         fCoinBase = tx.IsCoinBase();
         vout = tx.vout;
+        // Within an asset definition transaction, the asset being defined is identified with a 0.
+        if (tx.IsAssetDefinition()) {
+            const CAssetID assetID = CAssetID(tx.GetHash());
+            BOOST_FOREACH(CTxOut& txout, vout)
+                if (txout.assetID.IsNull())
+                    txout.assetID = assetID;
+        }
+
         nHeight = nHeightIn;
         nVersion = tx.nVersion;
         ClearUnspendable();
@@ -455,16 +463,18 @@ public:
 
     //! Calculate the size of the cache (in bytes)
     size_t DynamicMemoryUsage() const;
+    
+    CAmountMap GetValuesIn(const CTransaction& tx) const;
 
     /** 
-     * Amount of bitcredits coming in to a transaction
+     * Amount of bitcredits coming in to a transaction of the type assetID
      * Note that lightweight clients may not know anything besides the hash of previous transactions,
      * so may not be able to calculate this.
      *
      * @param[in] tx	transaction for which we are checking input total
      * @return	Sum of value of all inputs (scriptSigs)
      */
-    CAmount GetValueIn(const CTransaction& tx) const;
+    CAmount GetValueIn(const CTransaction& tx, const CAssetID& assetID) const;
 
     //! Check whether all prevouts of the transaction are present in the UTXO set represented by this view
     bool HaveInputs(const CTransaction& tx) const;

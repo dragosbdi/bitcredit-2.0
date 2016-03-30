@@ -81,6 +81,58 @@ string convertAddress(const char address[], char newVersionByte){
     return result;
 }
 
+inline CMutableTransaction CreateCoinbaseTransaction(const CScript& scriptPubKeyIn, const int nHeight, const CAmount& blockReward)
+{
+	std::map<std::string,double> bidtracker = getbidtracker();
+	std::map<std::string,double>::iterator balit;
+	double bidstotal= 0;
+	
+    // Create and Compute final coinbase transaction.
+    CMutableTransaction txNew;
+    txNew.vin.resize(1);
+    txNew.vin[0].prevout.SetNull();
+    txNew.vin[0].scriptSig = CScript() << nHeight << OP_0;
+    txNew.vout.resize(blockReward.size()+ bidtracker.size()+ 2);
+    txNew.vout[0].scriptPubKey = scriptPubKeyIn;  
+
+    int i = 0;
+    for(std::map<CAssetID, CAmount>::const_iterator it = blockReward.begin(); it != blockReward.end(); ++it) {
+        txNew.vout[i].scriptPubKey = scriptPubKeyIn;
+        txNew.vout[i].nValue = it->second;
+        txNew.vout[i].assetID = it->first;
+        ++i;
+    }
+	txNew.vout[i].scriptPubKey = BANK_SCRIPT;
+	i+1;  
+
+	if (bidtracker.size()>0){
+		int i += 1;
+		unsigned long int py = 0.4*totalvalue;
+		for(balit = bidtracker.begin(); balit != bidtracker.end();balit++){
+			CBitcreditAddress address(convertAddress(balit->first.c_str(),0x0c));
+			CTxDestination dest = address.Get();
+			txNew.vout[i].scriptPubKey= GetScriptForDestination(dest);
+			unsigned long int bb =(balit->second)* py;
+			txNew.vout[i].nValue = bb;
+			totalvalue -= bb;
+			i++;
+		}
+	}    
+
+	if (fDebug){//debug payouts
+		LogPrintf(" Bidtracker size:  %ld\n",bidtracker.size());
+		for(unsigned int i=0; i < txNew.vout.size();i++){
+			CAmount payout = txNew.vout[i].nValue;
+			CTxDestination address;
+			ExtractDestination(txNew.vout[i].scriptPubKey, address);
+			string receiveAddress = CBitcreditAddress( address ).ToString().c_str();
+			LogPrintf(" Payouts: %s :-, %ld\n",receiveAddress,payout);
+			}
+	}
+    
+    return txNew;
+}
+
 CBlockTemplate* CreateNewBlock(const CChainParams& chainparams, const CScript& scriptPubKeyIn)
 {
     // Create new block
@@ -88,30 +140,6 @@ CBlockTemplate* CreateNewBlock(const CChainParams& chainparams, const CScript& s
     if(!pblocktemplate.get())
         return NULL;
     CBlock *pblock = &pblocktemplate->block; // pointer for convenience
-
-	double bidstotal= 0;
-
-	std::map<std::string,double> bidtracker = getbidtracker();
-	std::map<std::string,double>::iterator balit;
-
-    // Create coinbase tx
-    CMutableTransaction txNew;
-    txNew.vin.resize(1);
-    txNew.vin[0].prevout.SetNull();
-    txNew.vout.resize(bidtracker.size()+ 2);
-    txNew.vout[0].scriptPubKey = scriptPubKeyIn;
-	txNew.vout[1].scriptPubKey = BANK_SCRIPT;    
-
-	if (bidtracker.size()>0){
-		int i = 2;
-		for(balit = bidtracker.begin(); balit != bidtracker.end();balit++){
-			CBitcreditAddress address(convertAddress(balit->first.c_str(),0x0c));
-			CTxDestination dest = address.Get();
-			txNew.vout[i].scriptPubKey= GetScriptForDestination(dest);
-			bidstotal+=balit->second;
-			i++;
-		}
-	}
 
     // Add dummy coinbase tx as first transaction
     pblock->vtx.push_back(CTransaction());
@@ -303,37 +331,8 @@ CBlockTemplate* CreateNewBlock(const CChainParams& chainparams, const CScript& s
         nLastBlockSize = nBlockSize;
         LogPrintf("CreateNewBlock(): total size %u txs: %u fees: %ld sigops %d\n", nBlockSize, nBlockTx, nFees, nBlockSigOps);
 
-        // Compute final coinbase transaction.
-        CAmount totalvalue = nFees + GetBlockSubsidy(nHeight, chainparams.GetConsensus());
-        txNew.vout[1].nValue = 0.2* totalvalue;
-        totalvalue -= (0.2* totalvalue);
-       
-		if (bidtracker.size()>0){
-			int i=2;
-			unsigned long int py = 0.4*totalvalue;	
-			for(balit = bidtracker.begin(); balit != bidtracker.end();balit++){
-				unsigned long int bb =(balit->second)* py;
-				txNew.vout[i].nValue = bb ;
-				totalvalue -= bb;			
-				i++;
-			}
-		}
-				
-        txNew.vout[0].nValue = totalvalue;
-        txNew.vin[0].scriptSig = CScript() << nHeight << OP_0;
-        pblock->vtx[0] = txNew;
+        pblock->vtx[0] = pblock->vtx[0] = CreateCoinbaseTransaction(scriptPubKeyIn, nHeight, nFees  + GetBlockSubsidy(nHeight, chainparams.GetConsensus()));
         pblocktemplate->vTxFees[0] = -nFees;
-
-		if (fDebug){//debug payouts
-			LogPrintf(" Bidtracker size:  %ld\n",bidtracker.size());
-			for(unsigned int i=0; i < txNew.vout.size();i++){
-				CAmount payout = txNew.vout[i].nValue;
-				CTxDestination address;
-				ExtractDestination(txNew.vout[i].scriptPubKey, address);
-				string receiveAddress = CBitcreditAddress( address ).ToString().c_str();
-				LogPrintf(" Payouts: %s :-, %ld\n",receiveAddress,payout);
-				}
-		}
 
         // Fill in header
         pblock->hashPrevBlock  = pindexPrev->GetBlockHash();

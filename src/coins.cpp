@@ -237,16 +237,35 @@ const CTxOut &CCoinsViewCache::GetOutputFor(const CTxIn& input) const
     return coins->vout[input.prevout.n];
 }
 
-CAmount CCoinsViewCache::GetValueIn(const CTransaction& tx) const
+CAmount CCoinsViewCache::GetValueIn(const CTransaction& tx, const CAssetID& assetID) const
 {
     if (tx.IsCoinBase())
         return 0;
 
     CAmount nResult = 0;
-    for (unsigned int i = 0; i < tx.vin.size(); i++)
-        nResult += GetOutputFor(tx.vin[i]).nValue;
+    // The first input is null for asset definition transactions
+    for (unsigned int i = tx.IsAssetDefinition() ? 1 : 0; i < tx.vin.size(); i++) {
+        const CTxOut& txOut = GetOutputFor(tx.vin[i]);
+        if (txOut.assetID == assetID)
+            nResult += txOut.nValue;
+    }
 
     return nResult;
+}
+
+CAmountMap CCoinsViewCache::GetValuesIn(const CTransaction& tx) const
+{
+    CAmountMap valuesIn;
+    if (tx.IsCoinBase())
+        return valuesIn;
+
+    // The first input is null for asset definition transactions
+    for (unsigned int i = tx.IsAssetDefinition() ? 1 : 0; i < tx.vin.size(); i++) {
+        const CTxOut& txOut = GetOutputFor(tx.vin[i]);
+        // Accumulate total input per asset
+        valuesIn[txOut.assetID] += txOut.nValue;
+    }
+    return valuesIn;
 }
 
 bool CCoinsViewCache::HaveInputs(const CTransaction& tx) const

@@ -9,6 +9,33 @@
 #include "tinyformat.h"
 #include "utilstrencodings.h"
 
+bool operator<(const CAmountMap& a, const CAmountMap& b)
+{
+    for(std::map<CAssetID, CAmount>::const_iterator it = b.begin(); it != b.end(); ++it) {
+        if (a.count(it->first) == 0 || a.find(it->first)->second < it->second)
+            return true;
+    }
+    return false;
+}
+
+CAmountMap& operator+=(CAmountMap& a, const CAmountMap& b)
+{
+    for(std::map<CAssetID, CAmount>::const_iterator it = b.begin(); it != b.end(); ++it)
+        a[it->first] += it->second;
+    return a;
+}
+
+CAmountMap& operator-=(CAmountMap& a, const CAmountMap& b)
+{
+    for(std::map<CAssetID, CAmount>::const_iterator it = b.begin(); it != b.end(); ++it) {
+        if (a.count(it->first) > 0)
+            a[it->first] -= it->second;
+        else
+            throw std::runtime_error(strprintf("%s : asset %s is not contained in this map", __func__, it->first.ToString()));
+    }
+    return a;
+}
+
 std::string COutPoint::ToString() const
 {
     return strprintf("COutPoint(%s, %u)", hash.ToString().substr(0,10), n);
@@ -56,7 +83,7 @@ uint256 CTxOut::GetHash() const
 
 std::string CTxOut::ToString() const
 {
-    return strprintf("CTxOut(nValue=%d.%08d, scriptPubKey=%s)", nValue / COIN, nValue % COIN, HexStr(scriptPubKey).substr(0, 30));
+    return strprintf("CTxOut(nValue=%d.%08d, assetID=%s, scriptPubKey=%s)", nValue / COIN, nValue % COIN, assetID.ToString(), HexStr(scriptPubKey).substr(0, 30));
 }
 
 CMutableTransaction::CMutableTransaction() : nVersion(CTransaction::CURRENT_VERSION), nLockTime(0) {}
@@ -87,16 +114,42 @@ CTransaction& CTransaction::operator=(const CTransaction &tx) {
     return *this;
 }
 
-CAmount CTransaction::GetValueOut() const
+CAmount CTransaction::GetValueOut(const CAssetID& _assetID) const
 {
+    // Within an asset definition transaction, the asset being defined is identified with a 0
+    const CAssetID& assetID = this->IsAssetDefinition() && _assetID == CAssetID(this->GetHash()) ? CAssetID() : _assetID;
     CAmount nValueOut = 0;
     for (std::vector<CTxOut>::const_iterator it(vout.begin()); it != vout.end(); ++it)
     {
-        nValueOut += it->nValue;
+        if (it->assetID == assetID)
+			nValueOut += it->nValue;
+        
         if (!MoneyRange(it->nValue) || !MoneyRange(nValueOut))
             throw std::runtime_error("CTransaction::GetValueOut(): value out of range");
     }
     return nValueOut;
+}
+
+CAmountMap CTransaction::GetMapValuesOut(bool fIncludeIssued) const
+{
+    CAmountMap valuesOut;
+    const CAssetID newAssetID(this->GetHash());
+    for (std::vector<CTxOut>::const_iterator it(this->vout.begin()); it != this->vout.end(); ++it) {
+        const CAmount& nValue = it->nValue;
+        CAssetID assetID = it->assetID;
+
+        // Within an asset definition transaction, the asset being defined is identified with a 0
+        if (assetID.IsNull() && this->IsAssetDefinition())
+            assetID = newAssetID;
+
+        // Accumulate total output per asset
+        valuesOut[assetID] += nValue;
+    }
+    // The newly defined asset can be excluded optionally
+    if (!fIncludeIssued && this->IsAssetDefinition())
+        valuesOut.erase(newAssetID);
+
+    return valuesOut;
 }
 
 double CTransaction::ComputePriority(double dPriorityInputs, unsigned int nTxSize) const
