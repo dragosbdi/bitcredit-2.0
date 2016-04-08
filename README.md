@@ -1,7 +1,7 @@
 Bitcredit Core integration/staging tree
 =====================================
 
-[![Build Status](https://travis-ci.org/bitcredit/bitcredit.svg?branch=master)](https://travis-ci.org/bitcredit/bitcredit)
+[![Build Status](https://travis-ci.org/dragosbdi/bitcredit-2.0.svg?branch=master)](https://travis-ci.org/dragosbdi/bitcredit-2.0)
 
 https://bitcreditcore.org
 

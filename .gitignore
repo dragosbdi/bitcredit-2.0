@@ -56,7 +56,6 @@ cache.db
 *.pyc
 *.o
 *.o-*
-*.patch
 .bitcredit
 *.a
 *.pb.cc
