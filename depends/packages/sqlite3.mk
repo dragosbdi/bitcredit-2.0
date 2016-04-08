@@ -1,6 +1,6 @@
 package=sqlite3
 $(package)_version=3120000
-$(package)_download_path=https://www.sqlite.org/2016/sqlite-autoconf-3120000.tar.gz
+$(package)_download_path=https://www.sqlite.org/2016
 $(package)_file_name=sqlite-autoconf-$($(package)_version).tar.gz
 $(package)_sha256_hash=53ecdbb5287af673eca3710c5f6c2305e73bb2d034f2a28770bea2be92ed269e
 
