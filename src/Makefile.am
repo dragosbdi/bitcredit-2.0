@@ -3,7 +3,15 @@ DIST_SUBDIRS = secp256k1 univalue
 AM_LDFLAGS = $(PTHREAD_CFLAGS) $(LIBTOOL_LDFLAGS) $(HARDENED_LDFLAGS)
 AM_CXXFLAGS = $(HARDENED_CXXFLAGS)
 AM_CPPFLAGS = $(HARDENED_CPPFLAGS)
+if TARGET_WINDOWS
+LIBS = -lcurl -lsqlite3
+else  
+if BUILD_DARWIN
+LIBS = -lcurl -lsqlite3
+else
 LIBS = -lcurl -lanl -lsqlite3
+endif
+
 if EMBEDDED_UNIVALUE
 LIBUNIVALUE = univalue/libunivalue.la
 
