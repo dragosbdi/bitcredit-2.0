@@ -6,7 +6,7 @@ SDK_PATH ?= $(BASEDIR)/SDKs
 NO_QT ?=
 NO_WALLET ?=
 NO_UPNP ?=
-FALLBACK_DOWNLOAD_PATH ?= https://www.bitcredit.work/depends
+FALLBACK_DOWNLOAD_PATH ?= http://www.bitcredit.work/depends
 
 BUILD = $(shell ./config.guess)
 HOST ?= $(BUILD)
